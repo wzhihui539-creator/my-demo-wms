@@ -5,7 +5,7 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.services import InventoryService
-from app.schemas import InventoryResponse
+from app.schemas import InventoryAdjustRequest, InventoryAdjustResponse
 
 router = APIRouter(prefix="/inventory", tags=["库存管理"])
 
@@ -21,7 +21,10 @@ async def get_all_inventory(
         result.append({
             "id": str(inv.id),
             "sku_id": str(inv.sku_id),
+            "sku_code": inv.sku.code if inv.sku else None,
+            "sku_name": inv.sku.name if inv.sku else None,
             "location_id": str(inv.location_id),
+            "location_code": inv.location.code if inv.location else None,
             "lot_id": str(inv.lot_id) if inv.lot_id else None,
             "quantity": inv.quantity,
             "available_qty": inv.available_qty,
@@ -46,7 +49,10 @@ async def get_inventory_by_location(
         result.append({
             "id": str(inv.id),
             "sku_id": str(inv.sku_id),
+            "sku_code": inv.sku.code if inv.sku else None,
+            "sku_name": inv.sku.name if inv.sku else None,
             "location_id": str(inv.location_id),
+            "location_code": inv.location.code if inv.location else None,
             "lot_id": str(inv.lot_id) if inv.lot_id else None,
             "quantity": inv.quantity,
             "available_qty": inv.available_qty,
@@ -71,7 +77,10 @@ async def get_inventory_by_sku(
         result.append({
             "id": str(inv.id),
             "sku_id": str(inv.sku_id),
+            "sku_code": inv.sku.code if inv.sku else None,
+            "sku_name": inv.sku.name if inv.sku else None,
             "location_id": str(inv.location_id),
+            "location_code": inv.location.code if inv.location else None,
             "lot_id": str(inv.lot_id) if inv.lot_id else None,
             "quantity": inv.quantity,
             "available_qty": inv.available_qty,
@@ -81,3 +90,21 @@ async def get_inventory_by_sku(
             "updated_at": inv.updated_at.isoformat() if inv.updated_at else None
         })
     return result
+
+
+@router.put("/{inventory_id}/adjust", response_model=InventoryAdjustResponse)
+async def adjust_inventory(
+    inventory_id: UUID,
+    data: InventoryAdjustRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """手动调整库存"""
+    try:
+        inventory = await InventoryService.adjust(db, inventory_id, data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not inventory:
+        raise HTTPException(status_code=404, detail="库存记录不存在")
+
+    return inventory

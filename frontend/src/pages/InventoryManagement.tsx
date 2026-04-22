@@ -1,13 +1,16 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, message, Space, Tag, Card, Row, Col, Statistic as AntStatistic } from 'antd';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, message, Space, Tag, Card, Row, Col, Statistic as AntStatistic } from 'antd';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { api } from '../utils/api';
 
 interface InventoryItem {
   id: string;
   sku_id: string;
+  sku_code?: string;
+  sku_name?: string;
   location_id: string;
+  location_code?: string;
   quantity: number;
   available_qty: number;
   locked_qty: number;
@@ -58,6 +61,22 @@ export default function InventoryManagement() {
     initialData: {},
   });
 
+  const adjustMutation = useMutation({
+    mutationFn: ({ inventoryId, data }: { inventoryId: string; data: any }) =>
+      api.put(`/inventory/${inventoryId}/adjust`, data),
+    onSuccess: () => {
+      message.success('库存调整成功');
+      setIsModalOpen(false);
+      setEditingRecord(null);
+      form.resetFields();
+      queryClient.invalidateQueries({ queryKey: ['inventories'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-summary'] });
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '库存调整失败');
+    },
+  });
+
   // 监听入库/出库操作，自动刷新库存
   useEffect(() => {
     const interval = setInterval(() => {
@@ -75,8 +94,18 @@ export default function InventoryManagement() {
   };
 
   const columns = [
-    { title: '商品', dataIndex: 'sku_id', key: 'sku_id' },
-    { title: '库位', dataIndex: 'location_id', key: 'location_id' },
+    {
+      title: '商品',
+      dataIndex: 'sku_id',
+      key: 'sku_id',
+      render: (_: string, record: InventoryItem) => record.sku_name || record.sku_code || record.sku_id,
+    },
+    {
+      title: '库位',
+      dataIndex: 'location_id',
+      key: 'location_id',
+      render: (_: string, record: InventoryItem) => record.location_code || record.location_id,
+    },
     { title: '数量', dataIndex: 'quantity', key: 'quantity' },
     { title: '可用数量', dataIndex: 'available_qty', key: 'available_qty' },
     { title: '锁定数量', dataIndex: 'locked_qty', key: 'locked_qty' },
@@ -98,6 +127,11 @@ export default function InventoryManagement() {
     form.setFieldsValue(record);
     setIsModalOpen(true);
   }, [form]);
+
+  const handleAdjustSubmit = useCallback((values: any) => {
+    if (!editingRecord) return;
+    adjustMutation.mutate({ inventoryId: editingRecord.id, data: values });
+  }, [adjustMutation, editingRecord]);
 
   if (error) {
     return (
@@ -163,13 +197,34 @@ export default function InventoryManagement() {
         width={600}
         destroyOnClose={true}
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" onFinish={handleAdjustSubmit}>
+          <Form.Item label="商品">
+            <Input value={editingRecord?.sku_name || editingRecord?.sku_code || editingRecord?.sku_id} disabled />
+          </Form.Item>
+          <Form.Item label="库位">
+            <Input value={editingRecord?.location_code || editingRecord?.location_id} disabled />
+          </Form.Item>
           <Form.Item name="quantity" label="数量">
-            <InputNumber disabled />
+            <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="available_qty" label="可用数量">
-            <InputNumber disabled />
+            <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
+          <Form.Item name="locked_qty" label="锁定数量">
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="status" label="状态">
+            <Select>
+              <Select.Option value="normal">normal</Select.Option>
+              <Select.Option value="empty">empty</Select.Option>
+              <Select.Option value="locked">locked</Select.Option>
+              <Select.Option value="damaged">damaged</Select.Option>
+            </Select>
+          </Form.Item>
+          <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" htmlType="submit" loading={adjustMutation.isPending}>保存</Button>
+          </Space>
         </Form>
       </Modal>
     </div>

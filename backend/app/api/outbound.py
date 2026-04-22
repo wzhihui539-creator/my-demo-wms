@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.services import OutboundService
 from app.schemas import (
     OutboundOrderCreate, OutboundOrderUpdate, OutboundOrderResponse,
-    PickRequest, PickTaskResponse,
+    PickRequest, StartPickRequest, PickTaskResponse,
     ShipRequest, ShipRecordResponse,
     WaveCreate, WaveResponse,
     PaginationParams
@@ -69,6 +69,21 @@ async def pick_goods(
     try:
         task = await OutboundService.pick(db, order_id, data)
         return task
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/orders/{order_id}/start-pick", response_model=OutboundOrderResponse)
+async def start_pick_order(
+    order_id: UUID,
+    data: StartPickRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """开始拣货"""
+    try:
+        order = await OutboundService.start_pick(db, order_id, data)
+        order = await OutboundService.get_order_by_id(db, order.id)
+        return order
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
