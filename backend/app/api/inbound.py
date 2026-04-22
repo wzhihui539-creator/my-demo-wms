@@ -115,6 +115,15 @@ async def create_putaway_task(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/orders/{order_id}/receive-records")
+async def list_receive_records(
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """获取入库单下可用于上架的收货记录"""
+    return await InboundService.get_receive_records_by_order(db, order_id)
+
+
 @router.post("/putaway-tasks/{task_id}/complete", response_model=PutawayTaskResponse)
 async def complete_putaway(
     task_id: UUID,

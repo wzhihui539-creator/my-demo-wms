@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, and_
+from sqlalchemy import select, update, and_, func
 from sqlalchemy.orm import joinedload, selectinload
 from typing import List, Optional
 from uuid import UUID
@@ -200,6 +200,22 @@ class InboundService:
         record = record_result.scalar_one_or_none()
         if not record:
             raise ValueError("收货记录不存在")
+        if record.inbound_order_id != order_id:
+            raise ValueError("收货记录不属于当前入库单")
+
+        # 校验上架数量不超过可上架数量（累计任务）
+        used_qty_result = await db.execute(
+            select(func.coalesce(func.sum(PutawayTask.quantity), 0)).where(
+                and_(
+                    PutawayTask.receive_record_id == receive_record_id,
+                    PutawayTask.status != "cancelled"
+                )
+            )
+        )
+        used_qty = used_qty_result.scalar() or 0
+        remain_qty = record.quantity - used_qty
+        if quantity > remain_qty:
+            raise ValueError(f"上架数量不能超过可上架数量，剩余可上架: {remain_qty}")
         
         # 生成任务号
         task_no = f"PT{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -219,6 +235,45 @@ class InboundService:
         await db.commit()
         await db.refresh(task)
         return task
+
+    @staticmethod
+    async def get_receive_records_by_order(db: AsyncSession, order_id: UUID) -> List[dict]:
+        """获取入库单收货记录（含可上架数量）"""
+        records_result = await db.execute(
+            select(ReceiveRecord, InboundItem)
+            .join(InboundItem, InboundItem.id == ReceiveRecord.inbound_item_id)
+            .where(ReceiveRecord.inbound_order_id == order_id)
+            .order_by(ReceiveRecord.created_at.desc())
+        )
+        rows = records_result.all()
+
+        result = []
+        for record, item in rows:
+            used_qty_result = await db.execute(
+                select(func.coalesce(func.sum(PutawayTask.quantity), 0)).where(
+                    and_(
+                        PutawayTask.receive_record_id == record.id,
+                        PutawayTask.status != "cancelled"
+                    )
+                )
+            )
+            used_qty = used_qty_result.scalar() or 0
+            remain_qty = max(record.quantity - used_qty, 0)
+
+            result.append({
+                "id": str(record.id),
+                "inbound_item_id": str(record.inbound_item_id),
+                "sku_id": str(record.sku_id),
+                "sku_name": item.sku_name,
+                "lot_no": record.lot_no,
+                "quantity": record.quantity,
+                "putaway_qty": used_qty,
+                "remain_qty": remain_qty,
+                "location_id": str(record.location_id) if record.location_id else None,
+                "created_at": record.created_at.isoformat() if record.created_at else None,
+            })
+
+        return result
     
     @staticmethod
     async def complete_putaway(db: AsyncSession, task_id: UUID, operator: str = None) -> PutawayTask:

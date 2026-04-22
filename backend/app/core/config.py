@@ -1,5 +1,9 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -9,7 +13,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     
     # 数据库 (SQLite 用于演示)
-    DATABASE_URL: str = "sqlite+aiosqlite:////root/.openclaw/workspace/wms/backend/wms.db"
+    DATABASE_URL: str = f"sqlite+aiosqlite:///{BASE_DIR / 'wms.db'}"
     
     # Redis (演示环境使用内存)
     REDIS_URL: str = "memory://"

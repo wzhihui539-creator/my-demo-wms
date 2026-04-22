@@ -11,7 +11,7 @@ from app.models import (
 )
 from app.schemas import (
     OutboundOrderCreate, OutboundOrderUpdate,
-    PickRequest, ShipRequest
+    PickRequest, ShipRequest, StartPickRequest
 )
 
 
@@ -112,6 +112,10 @@ class OutboundService:
         item = item_result.scalar_one_or_none()
         if not item or item.order_id != order_id:
             raise ValueError("出库明细不存在")
+
+        remain_qty = item.expected_qty - item.picked_qty
+        if data.quantity > remain_qty:
+            raise ValueError(f"拣货数量不能超过待拣数量，待拣数量: {remain_qty}")
         
         # 检查库存是否足够
         inv_result = await db.execute(
@@ -165,12 +169,44 @@ class OutboundService:
         )
         order = order_result.scalar_one()
         order.picked_qty += data.quantity
-        order.status = "picking"
         order.picked_date = datetime.utcnow()
+
+        # 检查是否全部拣货完成
+        all_items_result = await db.execute(
+            select(OutboundItem).where(OutboundItem.order_id == order_id)
+        )
+        all_items = all_items_result.scalars().all()
+        all_picked = all(outbound_item.picked_qty >= outbound_item.expected_qty for outbound_item in all_items)
+        order.status = "picked" if all_picked else "picking"
         
         await db.commit()
         await db.refresh(task)
         return task
+
+    @staticmethod
+    async def start_pick(db: AsyncSession, order_id: UUID, data: StartPickRequest) -> OutboundOrder:
+        """开始拣货：将出库单从 pending 置为 picking"""
+        order_result = await db.execute(
+            select(OutboundOrder)
+            .options(selectinload(OutboundOrder.items))
+            .where(OutboundOrder.id == order_id)
+        )
+        order = order_result.scalar_one_or_none()
+        if not order:
+            raise ValueError("出库单不存在")
+
+        if order.status != "pending":
+            raise ValueError("当前状态不可开始拣货")
+
+        order.status = "picking"
+        order.picked_date = datetime.utcnow()
+        for item in order.items:
+            if item.status == "pending":
+                item.status = "picking"
+
+        await db.commit()
+        await db.refresh(order)
+        return order
     
     @staticmethod
     async def ship(db: AsyncSession, order_id: UUID, data: ShipRequest) -> ShipRecord:
