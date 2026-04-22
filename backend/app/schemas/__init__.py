@@ -198,7 +198,7 @@ from app.schemas.check import (
 from app.schemas.outbound import (
     OutboundOrderCreate, OutboundOrderUpdate, OutboundOrderResponse,
     OutboundItemCreate, OutboundItemResponse,
-    PickRequest, PickTaskResponse,
+    PickRequest, StartPickRequest, PickTaskResponse,
     ShipRequest, ShipRecordResponse,
     WaveCreate, WaveResponse
 )
