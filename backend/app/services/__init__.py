@@ -90,6 +90,13 @@ class LocationService:
         )
         return result.scalars().all()
 
+    @staticmethod
+    async def get_all(db: AsyncSession, skip: int = 0, limit: int = 500) -> List[Location]:
+        result = await db.execute(
+            select(Location).offset(skip).limit(limit)
+        )
+        return result.scalars().all()
+
 
 class SKUService:
     """商品服务"""

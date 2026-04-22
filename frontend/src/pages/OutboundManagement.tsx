@@ -412,7 +412,7 @@ export default function OutboundManagement() {
                 onChange={(value) => setActionFormData({ ...actionFormData, from_location_id: value })}
               >
                 {locations.map((loc: any) => (
-                  <Option key={loc.id} value={loc.id}>{loc.code} - {loc.name}</Option>
+                  <Option key={loc.id} value={loc.id}>{loc.code}{loc.location_type ? ` (${loc.location_type})` : ""}</Option>
                 ))}
               </Select>
             </Form.Item>

@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-from app.api import warehouses, skus, auth, inventory, inbound, outbound, check, alert, report
+from app.api import warehouses, skus, auth, inventory, inbound, outbound, check, alert, report, locations
 
 
 app = FastAPI(
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(warehouses.router)
 app.include_router(skus.router)
+app.include_router(locations.router)
 app.include_router(inventory.router)
 app.include_router(inbound.router)
 app.include_router(outbound.router)
