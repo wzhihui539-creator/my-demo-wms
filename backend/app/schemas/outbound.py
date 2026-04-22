@@ -91,6 +91,11 @@ class PickRequest(BaseModel):
     operator: Optional[str] = None
 
 
+class StartPickRequest(BaseModel):
+    """开始拣货请求"""
+    operator: Optional[str] = None
+
+
 class PickTaskResponse(BaseModel):
     """拣货任务响应"""
     id: UUID
