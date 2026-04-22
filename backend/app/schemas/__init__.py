@@ -10,7 +10,6 @@ class WarehouseBase(BaseModel):
     address: Optional[str] = None
     contact: Optional[str] = None
     phone: Optional[str] = None
-    remark: Optional[str] = None
 
 
 class WarehouseCreate(WarehouseBase):
@@ -23,7 +22,6 @@ class WarehouseUpdate(BaseModel):
     contact: Optional[str] = None
     phone: Optional[str] = None
     status: Optional[str] = None
-    remark: Optional[str] = None
 
 
 class WarehouseResponse(WarehouseBase):
@@ -137,6 +135,25 @@ class InventoryResponse(InventoryBase):
     sku: Optional[SKUResponse] = None
     location: Optional[LocationResponse] = None
     
+    class Config:
+        from_attributes = True
+
+
+class InventoryAdjustRequest(BaseModel):
+    quantity: int = Field(..., ge=0)
+    available_qty: int = Field(..., ge=0)
+    locked_qty: int = Field(..., ge=0)
+    status: Optional[str] = Field(default=None, pattern="^(normal|empty|locked|damaged)$")
+
+
+class InventoryAdjustResponse(BaseModel):
+    id: UUID
+    quantity: int
+    available_qty: int
+    locked_qty: int
+    status: str
+    updated_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 

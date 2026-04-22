@@ -9,7 +9,7 @@ from app.schemas import (
     WarehouseCreate, WarehouseUpdate,
     ZoneCreate, LocationCreate,
     SKUCreate, SKUUpdate,
-    UserCreate
+    UserCreate, InventoryAdjustRequest
 )
 
 
@@ -157,10 +157,36 @@ class InventoryService:
     async def get_by_sku(db: AsyncSession, sku_id: UUID) -> List[Inventory]:
         result = await db.execute(
             select(Inventory)
-            .options(joinedload(Inventory.location))
+            .options(joinedload(Inventory.sku), joinedload(Inventory.location))
             .where(Inventory.sku_id == sku_id)
         )
         return result.scalars().all()
+
+    @staticmethod
+    async def adjust(db: AsyncSession, inventory_id: UUID, data: InventoryAdjustRequest) -> Optional[Inventory]:
+        inventory = await db.get(Inventory, inventory_id)
+        if not inventory:
+            return None
+
+        if data.available_qty + data.locked_qty > data.quantity:
+            raise ValueError("可用数量与锁定数量之和不能大于总数量")
+
+        inventory.quantity = data.quantity
+        inventory.available_qty = data.available_qty
+        inventory.locked_qty = data.locked_qty
+
+        if data.status:
+            inventory.status = data.status
+        elif data.quantity == 0:
+            inventory.status = "empty"
+        elif data.locked_qty > 0 and data.available_qty == 0:
+            inventory.status = "locked"
+        else:
+            inventory.status = "normal"
+
+        await db.commit()
+        await db.refresh(inventory)
+        return inventory
 
 
 from app.services.outbound import OutboundService
