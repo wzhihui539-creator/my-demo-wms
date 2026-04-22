@@ -39,9 +39,9 @@ class ReportService:
         sku_count = sku_count_result.scalar() or 0
         
         # 总库位数
-        location_count_query = select(func.count(func.distinct(Inventory.location_id)))
+        location_count_query = select(func.count(Location.id))
         if warehouse_id:
-            location_count_query = location_count_query.join(Location).join(Zone).where(Zone.warehouse_id == warehouse_id)
+            location_count_query = location_count_query.join(Zone).where(Zone.warehouse_id == warehouse_id)
         
         location_count_result = await db.execute(location_count_query)
         location_count = location_count_result.scalar() or 0
@@ -54,12 +54,20 @@ class ReportService:
         empty_locations_result = await db.execute(empty_locations_query)
         empty_locations = empty_locations_result.scalar() or 0
         
+        # 已占用库位数（仅用于利用率计算）
+        occupied_location_query = select(func.count(func.distinct(Inventory.location_id)))
+        if warehouse_id:
+            occupied_location_query = occupied_location_query.join(Location).join(Zone).where(Zone.warehouse_id == warehouse_id)
+
+        occupied_location_result = await db.execute(occupied_location_query)
+        occupied_locations = occupied_location_result.scalar() or 0
+
         return {
             "total_quantity": total_qty,
             "sku_count": sku_count,
             "location_count": location_count,
             "empty_location_count": empty_locations,
-            "location_utilization": round((location_count - empty_locations) / location_count * 100, 2) if location_count > 0 else 0
+            "location_utilization": round(occupied_locations / location_count * 100, 2) if location_count > 0 else 0
         }
     
     @staticmethod

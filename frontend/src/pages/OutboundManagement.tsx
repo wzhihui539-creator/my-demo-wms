@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Table, Button, Modal, Form, Input, Select, InputNumber, message, Space, Tag } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, InputNumber, message, Space, Tag, Popconfirm } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PlusOutlined, EditOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, CarOutlined } from '@ant-design/icons';
 import { api } from '../utils/api';
@@ -86,6 +86,18 @@ export default function OutboundManagement() {
   });
 
   // 拣货操作
+  const startPickMutation = useMutation({
+    mutationFn: ({ orderId, data }: { orderId: string; data: any }) =>
+      api.post(`/outbound/orders/${orderId}/start-pick`, data),
+    onSuccess: () => {
+      message.success('已开始拣货');
+      queryClient.invalidateQueries({ queryKey: ['outbound-orders'] });
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '开始拣货失败');
+    },
+  });
+
   const pickMutation = useMutation({
     mutationFn: ({ orderId, data }: { orderId: string; data: any }) =>
       api.post(`/outbound/orders/${orderId}/pick`, data),
@@ -155,7 +167,7 @@ export default function OutboundManagement() {
   const getNextAction = (record: OutboundOrder) => {
     switch (record.status) {
       case 'pending':
-        return { type: 'pick' as const, label: '开始拣货', icon: <PlayCircleOutlined /> };
+        return { type: 'start-pick' as const, label: '开始拣货', icon: <PlayCircleOutlined /> };
       case 'picking':
         return { type: 'pick' as const, label: '继续拣货', icon: <CheckCircleOutlined /> };
       case 'picked':
@@ -165,6 +177,10 @@ export default function OutboundManagement() {
       default:
         return null;
     }
+  };
+
+  const handleStartPick = (record: OutboundOrder) => {
+    startPickMutation.mutate({ orderId: record.id, data: {} });
   };
 
   const handleAction = (record: OutboundOrder, type: 'pick' | 'ship') => {
@@ -204,14 +220,33 @@ export default function OutboundManagement() {
               <Button icon={<EditOutlined />} size="small" onClick={() => handleEdit(record)}>编辑</Button>
             )}
             {nextAction && (
-              <Button
-                type="primary"
-                size="small"
-                icon={nextAction.icon}
-                onClick={() => handleAction(record, nextAction.type)}
-              >
-                {nextAction.label}
-              </Button>
+              nextAction.type === 'start-pick' ? (
+                <Popconfirm
+                  title="确认开始拣货？"
+                  description="开始后订单状态会变为“拣货中”"
+                  onConfirm={() => handleStartPick(record)}
+                  okText="确认"
+                  cancelText="取消"
+                >
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={nextAction.icon}
+                    loading={startPickMutation.isPending}
+                  >
+                    {nextAction.label}
+                  </Button>
+                </Popconfirm>
+              ) : (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={nextAction.icon}
+                  onClick={() => handleAction(record, nextAction.type)}
+                >
+                  {nextAction.label}
+                </Button>
+              )
             )}
           </Space>
         );
@@ -377,7 +412,7 @@ export default function OutboundManagement() {
                 onChange={(value) => setActionFormData({ ...actionFormData, from_location_id: value })}
               >
                 {locations.map((loc: any) => (
-                  <Option key={loc.id} value={loc.id}>{loc.code} - {loc.name}</Option>
+                  <Option key={loc.id} value={loc.id}>{loc.code}{loc.location_type ? ` (${loc.location_type})` : ""}</Option>
                 ))}
               </Select>
             </Form.Item>
