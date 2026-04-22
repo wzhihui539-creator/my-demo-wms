@@ -183,6 +183,17 @@ export default function InboundManagement() {
   const [actionRecord, setActionRecord] = useState<InboundOrder | null>(null);
   const [actionFormData, setActionFormData] = useState<any>(null);
 
+  const { data: receiveRecords } = useQuery({
+    queryKey: ['receive-records', actionRecord?.id],
+    queryFn: async () => {
+      if (!actionRecord?.id) return [];
+      const res = await api.get(`/inbound/orders/${actionRecord.id}/receive-records`);
+      return Array.isArray(res.data) ? res.data : [];
+    },
+    enabled: !!actionRecord?.id && actionType === 'putaway',
+    initialData: [],
+  });
+
   const statusColors: Record<string, string> = {
     pending: 'default',
     receiving: 'processing',
@@ -486,16 +497,32 @@ export default function InboundManagement() {
                 ))}
               </Select>
             </Form.Item>
-            <Form.Item label="收货记录ID" required>
-              <Input
-                placeholder="收货记录ID"
-                onChange={(e) => setActionFormData({ ...actionFormData, receive_record_id: e.target.value })}
-              />
+            <Form.Item label="收货记录" required>
+              <Select
+                placeholder="选择收货记录"
+                onChange={(value) => {
+                  const record = receiveRecords.find((r: any) => r.id === value);
+                  setActionFormData({
+                    ...actionFormData,
+                    receive_record_id: value,
+                    quantity: record?.remain_qty,
+                  });
+                }}
+              >
+                {receiveRecords
+                  .filter((r: any) => (r.remain_qty || 0) > 0)
+                  .map((record: any) => (
+                    <Option key={record.id} value={record.id}>
+                      {record.sku_name || record.sku_id} / 批次:{record.lot_no || '-'} / 可上架:{record.remain_qty}
+                    </Option>
+                  ))}
+              </Select>
             </Form.Item>
             <Form.Item label="上架数量" required>
               <InputNumber
                 min={1}
                 placeholder="输入上架数量"
+                value={actionFormData?.quantity}
                 onChange={(value) => setActionFormData({ ...actionFormData, quantity: value })}
               />
             </Form.Item>

@@ -17,6 +17,8 @@ interface OutboundOrder {
   order_type: 'sales' | 'transfer';
   warehouse_id: string;
   total_qty: number;
+  picked_qty?: number;
+  shipped_qty?: number;
   status: string;
   priority: string;
   remark?: string;
@@ -101,8 +103,13 @@ export default function OutboundManagement() {
   const pickMutation = useMutation({
     mutationFn: ({ orderId, data }: { orderId: string; data: any }) =>
       api.post(`/outbound/orders/${orderId}/pick`, data),
-    onSuccess: () => {
-      message.success('拣货成功');
+    onSuccess: (_data, variables) => {
+      const currentTotalPicked = (actionRecord?.picked_qty || 0) + (variables.data.quantity || 0);
+      if (actionRecord && currentTotalPicked >= (actionRecord.total_qty || 0)) {
+        message.success('拣货完成，订单已全部拣货');
+      } else {
+        message.success('拣货成功');
+      }
       queryClient.invalidateQueries({ queryKey: ['outbound-orders'] });
       queryClient.invalidateQueries({ queryKey: ['inventories'] });
       setIsActionModalOpen(false);
@@ -192,6 +199,15 @@ export default function OutboundManagement() {
 
   const handleActionSubmit = () => {
     if (!actionRecord || !actionFormData) return;
+
+    if (actionType === 'pick') {
+      const selectedItem = actionRecord.items?.find((item: any) => item.id === actionFormData.outbound_item_id);
+      const remainQty = (selectedItem?.expected_qty || 0) - (selectedItem?.picked_qty || 0);
+      if ((actionFormData.quantity || 0) > remainQty) {
+        message.error(`拣货数量不能超过待拣数量（${remainQty}）`);
+        return;
+      }
+    }
 
     if (actionType === 'pick') {
       pickMutation.mutate({ orderId: actionRecord.id, data: actionFormData });
@@ -394,7 +410,7 @@ export default function OutboundManagement() {
               >
                 {actionRecord.items?.map((item: any) => (
                   <Option key={item.id} value={item.id}>
-                    {item.sku_name || item.sku_code} (计划: {item.expected_qty}, 已拣: {item.picked_qty || 0})
+                    {item.sku_name || item.sku_code} (计划: {item.expected_qty}, 已拣: {item.picked_qty || 0}, 待拣: {(item.expected_qty || 0) - (item.picked_qty || 0)})
                   </Option>
                 ))}
               </Select>
